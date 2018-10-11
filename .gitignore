@@ -1,0 +1,12 @@
+.ipynb_checkpoints
+venv
+.idea
+logloss_tests.ipynb
+data
+saved_models
+docs
+.DS_Store
+sandbox
+source/.DS_Store
+source/game/.DS_Store
+source/network_training/.DS_Store
