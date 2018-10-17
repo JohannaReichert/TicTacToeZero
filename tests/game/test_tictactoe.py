@@ -101,6 +101,12 @@ class Test_random_player(unittest.TestCase):
                                                                [1, 1, 1],
                                                                [1, 1, 1])))
 
+    def test__translate_idx(self):
+        """testing whether the index returned from vanilla_mcts.solve is translated correctly for use in tictactoe"""
+        self.assertEqual(self.ttt._translate_idx(5),(1,2))
+        self.assertEqual(self.ttt._translate_idx(2), (0, 2))
+
+
 
 if __name__ == "__main__":
     unittest.main()

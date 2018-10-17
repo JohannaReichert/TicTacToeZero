@@ -10,3 +10,4 @@ sandbox
 source/.DS_Store
 source/game/.DS_Store
 source/network_training/.DS_Store
+source/network_training/__pycache__

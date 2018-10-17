@@ -1,7 +1,6 @@
 import numpy as np
-import math
-from source.game.tictactoe import TTT
-from source.network_training import mcts, neural_network
+from sandbox import mcts
+
 
 class Train():
     """combining the mcts and neural network functions to train via self-play"""
@@ -39,11 +38,12 @@ class Train():
             if log:
                 print(f" It is player {players_turn}'s turn now.")
 
-            if players_turn == 0:
-                mcts_pos = self._choose_action(board,episode_step,available_moves)
-                self.game.make_move(mcts_pos, 0)
+
+            if players_turn == -1:
+                self.game.make_move(self.game.mcts_player(players_turn), -1)
             elif players_turn ==1:
-                self.game.make_move(self.game.random_player(),1)
+                self.game.make_move(self.game.mcts_player(players_turn), 1)
+
 
             winner = self.game.check_victory()
             if winner != -1:

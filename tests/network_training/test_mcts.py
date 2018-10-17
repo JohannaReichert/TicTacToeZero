@@ -1,8 +1,9 @@
 import unittest
 import numpy as np
-from source.network_training import mcts
+from sandbox import mcts
 from source.game import tictactoe
-import importlib
+
+
 #importlib.reload(mcts)
 
 

@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import tkinter as tk
+#from source.network_training import vanilla_mcts
+import time
 
 
 # 1 = x = random player or human, -1 = o = algo
@@ -28,7 +30,7 @@ class TTT():
 
     def check_victory(self):
         """checks whether one of the players wins at the current state of board
-        returns 0 if player 0 wins, 1 if player 1 wins, -1 if it is a draw"""
+        returns 1 if player_x wins, -1 if player_o wins, 0 if it is a draw"""
 
         # checking rows
         for x in range(3):
@@ -63,11 +65,23 @@ class TTT():
         pos = (moves_rows[index],moves_cols[index])
         return pos
 
-    def mcts_player(self):
-        """randomly selects a move from all legal moves at the current state of board. returns the move as a tuple (row_index,col_index)"""
+    def _translate_idx(self,best_action):
+        """takes best_action value returned by vanilla_mcts and converts it to a position in the 3x3 np.array"""
+        range_array = np.arange(0,9).reshape((3,3))
+        pos = np.where(range_array == best_action)
+        return pos
+
+
+    def mcts_player(self,players_turn):
+        """selects a move based on the result of mcts and returns the move as a tuple (row_index,col_index)"""
         moves_rows,moves_cols = self.show_available_moves()
-        index = np.random.choice(moves_rows.shape[0], replace=False)
-        pos = (moves_rows[index],moves_cols[index])
+        if players_turn == 1:
+            player = 'x'
+        elif players_turn == -1:
+            player = 'o'
+        vmcts = vanilla_mcts.VanillaMCTS(n_iterations=500, depth=10, exploration_constant=1.4, game_board = self.board,tree = None, win_mark=3, player=player,log=False, fig = False)
+        best_action, best_n, best_q, depth_searched = vmcts.solve()
+        pos = self._translate_idx(best_action)
         return pos
 
     def play_game(self,player_x, player_o, log = False):
@@ -78,7 +92,7 @@ class TTT():
         returns 0 if player0 won, 1 if player1 won and -1 if it is a draw"""
         #self._create_new_board()
 
-        players_turn = -1 # indicates whose turn it is (0 or 1)
+        players_turn = np.random.choice([-1,1]) # indicates whose turn it is (-1 or 1)
 
         while True:
             if log:
@@ -87,7 +101,7 @@ class TTT():
             if len(available_moves[0]) == 0:
                 if log:
                     print("Game ended in a draw!")
-                return -1
+                return 0
 
             if log:
                 print(f" It is player {players_turn}'s turn now.")
@@ -96,10 +110,12 @@ class TTT():
                 if player_o == "random":
                     self.make_move(self.random_player(), -1)
                 elif player_o == "mcts":
-                    self.make_move(self.mcts_player(), -1)
+                    self.make_move(self.mcts_player(players_turn), -1)
             elif players_turn ==1:
                 if player_x == "random":
                     self.make_move(self.random_player(),1)
+                elif player_x == "mcts":
+                    self.make_move(self.mcts_player(players_turn), 1)
 
             winner = self.check_victory()
             if winner != 0:
@@ -112,7 +128,70 @@ class TTT():
 
 
 if __name__ == "__main__":
-    ttt = TTT()
-    ttt.play_game("random", "random", log = True)
 
+    # watching them play
+    '''
+    ttt = TTT()
+    ttt.play_game("mcts", "mcts", log = True)
+    '''
+
+
+    # getting some stats
+
+    t0 = time.time()
+    winner_list = []
+    n_games = 100
+    for i in range(n_games):
+        ttt = TTT()
+        winner_list.append(ttt.play_game("mcts", "random", log = False))
+
+    t1 = time.time()
+
+
+    """n_iterations=2000, depth=10, exploration_constant=1.4, game_board = self.board,tree = None, win_mark=3, player=player,log=False, fig = False)"""
+    # mcts vs. mcts: 100 draws! 400 seconds
+    # mcts vs. random: 96 vs. 0, 4 draws. 143 sec
+    # 8000 iterations: mcts vs random: 93 vs 0, 7 draws. 492 sec
+    # 500 iterations: mcts vs random 96 vs 0, 4 draws. 43 sec
+
+    print(f"Percentage won by player_x: {(winner_list.count(1)/n_games)*100}%")
+    print(f"Percentage won by player_o: {(winner_list.count(-1)/n_games)*100}%")
+    print(f"Percentage draws: {(winner_list.count(0)/n_games)*100}%")
+    print(f"Time taken for {n_games}: {t1-t0} s")
+
+
+
+
+
+
+
+
+
+    """stats from running with mistake 3 (only updating levels of one player)"""
+    """n_iterations=1000, depth=10, exploration_constant=1.4, game_board = self.board,tree = None, win_mark=3, player=player,log=False, fig = False"""
+    # mcts vs. mcts: .39 vs. .37, .24 draws. 142 seconds
+    # 2000 iterations: mcts vs. mcts: .49 vs. .45, .06 draws. 424 seconds
+
+    """stats from running with mistake 2 (updating all levels) in simulation"""
+    """mcts settings: n_iterations=1000, depth=20, exploration_constant=1.4, game_board = self.board,tree = None, win_mark=3, player=player,log=False, fig = False)"""
+    # ramdomly chosen who starts
+    # mcts vs. mcts: 0.4 vs 0.6, 0 draws. Time approx. 159.8
+    """n_iterations = 3000, depth = 10, exploration_constant = 30, game_board = self.board, tree = None, win_mark = 3, player = player, log = False, fig = False)"""
+    # mcts vs. mcts:
+    # .48 vs 0.52. 459 sec
+
+    """stats from running with mistake in simulation"""
+    # mcts settings: n_iterations=1000, depth=20, exploration_constant=1.4, game_board = self.board, tree = None, win_mark=3, player=player,log=False
+    # in all cases, player_o started! (therefore has advantage)
+    # mcts vs. random: 0.89 vs. 0.1. Time approx 68 sec.
+    # mcts vs. mcts: 0.41 vs. 0.59. Time approx 145 sec.
+    # random vs. random: 0.25 vs. 0.65. Time approx 0.029 sec.
+
+    # values if it was randomly chosen who starts:
+    # mcts vs. random: 0.95 vs. 0.03. Time approx 71 sec.
+    # mcts vs. mcts: 0.45 vs. 0.55 (0 draws). Time approx 140 sec.
+    # random vs. random: 0.41 vs. 0.46 (0.13 draws). Time approx 0.032 sec.
+    # if n_iter = 5000: still mcts vs. mcts = 0.59 vs. 0.41, 0 draws. Time 550 sec
+
+    # higher exploration constant -> more draws (mcts vs. mcts approx. 0.2 draws)
 
