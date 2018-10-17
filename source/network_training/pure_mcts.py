@@ -3,11 +3,7 @@ from copy import deepcopy
 import matplotlib.pyplot as plt
 from source.game.tictactoe import TTT
 
-# adapted from:
-# https://github.com/hayoung-kim/mcts-tic-tac-toe/blob/master/play.py
-
-
-class VanillaMCTS(object):
+class PureMCTS(object):
     def __init__(self, n_iterations=50, depth=15, exploration_constant=5.0, tree = None, win_mark=3, game_board=None, player=None, log = False, fig = True):
         """@tree: nested dictionary, format see _set_tictactoe
         @ win_mark: if the row-wise, col-wise or diagonal-wise sum reaches this number, player 'x' (represented by 1 on the board)
@@ -416,8 +412,8 @@ if __name__ == '__main__':
     #tic.board = np.array(([-1, 1, 0],
     #                       [0, 1, 1],
     #                      [-1, -1, 1]))
-    mcts = VanillaMCTS(n_iterations=20, depth=10, exploration_constant=1.4,
-                       game_board = tic.board, tree = None, win_mark=3, player='x',log=True, fig = True)
+    mcts = PureMCTS(n_iterations=20, depth=10, exploration_constant=1.4,
+                    game_board = tic.board, tree = None, win_mark=3, player='x', log=True, fig = True)
     best_action, best_n, best_q, depth_searched = mcts.solve()
     print('best action= ', best_action, ' best_n= ', best_n,' best_q= ', best_q, 'depth_searched=', depth_searched)
 
