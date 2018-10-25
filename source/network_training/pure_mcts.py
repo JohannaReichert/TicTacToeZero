@@ -17,31 +17,68 @@ class PureMCTS(object):
         self.exploration_constant = exploration_constant
         self.total_n = 0 #1e-4 # orig 0
         self.max_depth_searched = 0
+        self.game_board = game_board
 
         self.log = log
         self.fig = fig
 
+        self.orig_player = player
+        self.root_id = (0,)
         self.leaf_node_id = None
         self.n_rows = len(game_board) # normal tictactoe: 3
         self.win_mark = win_mark # later used to check victory (tictactoe: 3 in a row)
 
         if tree == None:
-            self.tree = self._set_tictactoe(game_board, player)
+            self._set_tree(game_board, player)
         else:
             self.tree = tree
+            if self.log:
+                print("TREE IS REUSED")
 
-    def _set_tictactoe(self, game_board, player):
+    def _set_player(self,player):
+        self.orig_player = player
+        self.tree[self.root_id]['next_player'] = self.orig_player
+
+    def _set_board(self,board):
+        self.game_board = board
+
+
+    def _set_tree(self, game_board, player):
         """creates a nested tree dictionary with key = node_id, value = dict with keys state, player, child, parent, n, w, q.
         n, w and q will be filled later with: n = visit count of node, w = win count, q = w/n"""
-        root_id = (0,)
-        tree = {root_id: {'state': game_board,
+        #self.root_id = (0,)
+        self.tree = {self.root_id: {'state': game_board,
                           'next_player': player,
                           'child': [],
                           'parent': None,
                           'n': 0,
                           'w': 0,
                           'q': None}}
-        return tree
+
+    def _update_tree(self, best_action):
+        """after solving, update the tree so that the selected action is the new root. discard all the subtrees whose node_id
+        doesn't start with the new root id"""
+        new_root = self.root_id + (best_action,) # e.g. (0,3); the id of the selected action
+
+        #print("tree before updating ids")
+
+        #test= {k: self.tree[k] for k in list(self.tree.keys()) if
+        #           k[0:len(new_root)] == new_root}
+        #print(test)
+
+        # for every node in the subtree of the selected action, replace the node id. e.g. (0,3,1) becomes (0,1)
+        subtree = {(0,) + k[len(new_root):] : self.tree[k] for k in list(self.tree.keys()) if k[0:len(new_root)] == new_root}
+        # update parent ids
+        for node_id, node_info in subtree.items():
+            old_parent_id = node_info['parent']
+            node_info['parent'] = (0,) + old_parent_id[len(new_root):]
+
+        subtree[(0,)]['parent'] = None # the new root does not have a parent
+
+        self.tree = subtree
+
+
+
 
     def selection(self):
         """ iterates through the game tree by always selecting the action (child) with maximum ucb value.
@@ -55,12 +92,14 @@ class PureMCTS(object):
         leaf_node_id = (0,) # root node id
         if self.log:
             print('-------- selection ----------')
+            print("NEXT PLAYER:",self.tree[leaf_node_id]['next_player'])
 
         while not leaf_node_found:
             node_id = leaf_node_id
             n_child = len(self.tree[node_id]['child'])
             if self.log:
                 print(f"current tree state: \n{self.tree[node_id]['state']}")
+                print(f"next player: {self.tree[node_id]['next_player']}")
                 print("checking for children...")
             if n_child == 0: # no child --> node is a leaf node
                 leaf_node_id = node_id
@@ -78,11 +117,14 @@ class PureMCTS(object):
                     w = self.tree[child_id]['w']
                     n = self.tree[child_id]['n']
                     total_n = self.total_n
-                    # parent_id = self.tree[node_id]['parent']
-                    # if parent_id == None:
-                    #     total_n = 1
-                    # else:
-                    #     total_n = self.tree[parent_id]['n']
+                    parent_id = self.tree[node_id]['parent']
+
+                    '''
+                    if parent_id == None:
+                        total_n = 1
+                    else:
+                        total_n = self.tree[parent_id]['n']
+                    '''
 
                     if n == 0:
                         n = 1e-4 # avoiding division by zero
@@ -99,7 +141,7 @@ class PureMCTS(object):
                 if self.log:
                     print(f"total_n: {total_n}")
                     print(f"child with max ucb value: {leaf_node_id}")
-                    print(f"who's turn is it? {self.tree[leaf_node_id]['next_player']}")
+                    #print(f"who's turn is it? {self.tree[leaf_node_id]['next_player']}")
 
 
         depth = len(leaf_node_id) # leaf_node_id is a tuple with size = depth
@@ -237,7 +279,7 @@ class PureMCTS(object):
             print('-------- simulation ----------')
         self.total_n += 1
         state = deepcopy(self.tree[child_node_id]['state'])
-        previous_player = deepcopy(self.tree[child_node_id]['next_player'])
+        child_player = deepcopy(self.tree[child_node_id]['next_player'])
         anybody_win = False
         if self.log:
             print(f"simulation starting from child node {child_node_id}")
@@ -253,19 +295,19 @@ class PureMCTS(object):
                     print(f"winner: {winner} (x:1, o:-1)")
                 anybody_win = True
             else:
-                possible_actions = self._get_valid_actions(state)
+                possible_actions = self._get_valid_actions(state) #
                 # randomly choose action for simulation (= random rollout policy)
                 rand_idx = np.random.randint(low=0, high=len(possible_actions))
                 action, _ = possible_actions[rand_idx]
 
-                if previous_player == 'o': # changed this part. player is always the one who will make the NEXT move
-                    current_player = 'x'
+                if child_player == 'o': # player is always the one who will make the next move from the current board
+                    player_next_turn = 'x'
                     state[action] = -1
                 else:
-                    current_player = 'o'
+                    player_next_turn = 'o'
                     state[action] = 1
 
-                previous_player = current_player
+                child_player = player_next_turn
         return winner
 
     def backprop(self, child_node_id, winner):
@@ -273,11 +315,16 @@ class PureMCTS(object):
         traversed node
         in: child node id, winner ('draw', 'x', or 'o'), self.tree
         out: updated self.tree"""
-        orig_player = deepcopy(self.tree[(0,)]['next_player'])
-
+#        orig_player = deepcopy(self.tree[(0,)]['next_player'])
+#
+        child_next_player = deepcopy(self.tree[child_node_id]['next_player'])
+        #print('orig root:',deepcopy(self.tree[(0,)]['next_player']))
+        #print('orig child:',deepcopy(self.tree[child_node_id]['next_player']))
+        # winner is 'x', 'o', or 'draw'
         if winner == 'draw':
-            reward = 0 # orig 0
-        elif winner == orig_player:
+            reward = 0
+        # if the winner is the player who chose child_node_id (i.e. who is NOT next_player of child_id), reward is +1
+        elif winner != child_next_player:
             reward = 1
         else:
             reward = -1
@@ -287,10 +334,10 @@ class PureMCTS(object):
         while not finish_backprob:
             self.tree[node_id]['n'] += 1
 
-            ## changed this part ##
-            if self.tree[node_id]['next_player'] != orig_player:
+            # all traversed nodes that were caused by the same player as child_node will be rewarded +1
+            if self.tree[node_id]['next_player'] == child_next_player:
                 self.tree[node_id]['w'] += reward
-            elif self.tree[node_id]['next_player'] == orig_player:
+            elif self.tree[node_id]['next_player'] != child_next_player:
                 self.tree[node_id]['w'] += -reward
 
             ## original: self.tree[node_id]['w'] += reward
@@ -298,15 +345,25 @@ class PureMCTS(object):
             parent_id = self.tree[node_id]['parent']
             if parent_id == (0,):
                 self.tree[parent_id]['n'] += 1
-                self.tree[parent_id]['w'] += reward
+
+                if self.tree[parent_id]['next_player'] != child_next_player:
+                    self.tree[parent_id]['w'] += reward
+                elif self.tree[parent_id]['next_player'] == child_next_player:
+                    self.tree[parent_id]['w'] += -reward
+
+                #self.tree[parent_id]['w'] += 0#reward
                 self.tree[parent_id]['q'] = self.tree[parent_id]['w'] / self.tree[parent_id]['n']
                 finish_backprob = True
             else:
                 node_id = parent_id
 
-    def solve(self):
+    def solve(self, board, player_symbol):
         """this runs the mcts by calling the selection, expansion, simulation and backprop functions n_iteration times
-        and then selecting the best action (highest q value)"""
+        and then selecting the best action (highest n value)"""
+
+        self._set_tree(board,player_symbol)
+        self._set_board(board)
+        self._set_player(player_symbol)
         for i in range(self.n_iterations):
 
             if self.log:
@@ -322,19 +379,17 @@ class PureMCTS(object):
             winner = self.simulation(child_node_id)
             self.backprop(child_node_id, winner)
 
-            if self.log:
-                print(f"child after backpropagation: \n {self.tree[child_node_id]}")
-                parent_id = self.tree[child_node_id]['parent']
-                print(f"parent after backpropagation: \n {self.tree[parent_id]}")
 
             if depth_searched == self.depth:
                 if self.log:
                     print("depth_searched == self.depth")
                 break
-
         # SELECT BEST ACTION
         current_state_node_id = (0,)
         action_candidates = self.tree[current_state_node_id]['child'] # list of children (one number between 0 and 8 per child)
+        if self.log:
+            print("ACTION CAND:",action_candidates)
+        #print("node next player",self.tree[current_state_node_id]['next_player'])
         # qs = [self.tree[(0,)+(a,)]['q'] for a in action_candidates]
         best_n = -100
         best_q = -100
@@ -361,7 +416,7 @@ class PureMCTS(object):
 
         if self.log:
             # FOR DEBUGGING
-            print('\n----------------------')
+            print('\n-----------Summary of PureMCTS Results-----------')
             print(' [-] game board: \n')
             for row in self.tree[(0,)]['state']:
                 print (row)
@@ -370,7 +425,7 @@ class PureMCTS(object):
             #print(' best_q = %.2f' % (best_q))
             print(' best_n = %.2f' % (best_n))
             print(' [-] searching depth = %d' % (depth_searched))
-            print(f"[-] max_depth_searched: {self.max_depth_searched}")
+            print(f"[-] max_depth_searched: {self.max_depth_searched}\n\n\n\n")
         if self.fig:
             # FOR DEBUGGING
             fig = plt.figure(figsize=(5,6))
@@ -393,6 +448,12 @@ class PureMCTS(object):
             plt.waitforbuttonpress(0)
             plt.close(fig)
 
+
+        if self.log:
+            print("tree: ")
+            print(self.tree)
+
+
         return best_action, best_n, best_q, depth_searched
 
 
@@ -412,11 +473,20 @@ if __name__ == '__main__':
     #tic.board = np.array(([-1, 1, 0],
     #                       [0, 1, 1],
     #                      [-1, -1, 1]))
-    mcts = PureMCTS(n_iterations=20, depth=10, exploration_constant=1.4,
-                    game_board = tic.board, tree = None, win_mark=3, player='x', log=True, fig = True)
-    best_action, best_n, best_q, depth_searched = mcts.solve()
+    mcts = PureMCTS(n_iterations=10, depth=10, exploration_constant=1.4,
+                    game_board = tic.board, tree = None, win_mark=3, player='x', log=True, fig = False)
+    best_action, best_n, best_q, depth_searched= mcts.solve()
     print('best action= ', best_action, ' best_n= ', best_n,' best_q= ', best_q, 'depth_searched=', depth_searched)
 
+    """
+    tic.board = np.array(([-1, 0, 0],
+                           [1, 1, 0],
+                          [-1, 0, 1]))
+    mcts2 = PureMCTS(n_iterations=100, depth=10, exploration_constant=1.4,
+                    game_board=tic.board, tree=None, win_mark=3, player='o', log=True, fig=False)
+    best_action, best_n, best_q, depth_searched, = mcts2.solve()
+    print('best action= ', best_action, ' best_n= ', best_n,' best_q= ', best_q, 'depth_searched=', depth_searched)
+    """
 
 
 

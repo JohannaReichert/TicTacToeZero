@@ -4,6 +4,7 @@ venv
 logloss_tests.ipynb
 data
 saved_models
+source/saved_models
 docs
 .DS_Store
 sandbox
